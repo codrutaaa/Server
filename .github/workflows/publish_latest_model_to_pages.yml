@@ -14,9 +14,18 @@ jobs:
   publish:
     runs-on: ubuntu-latest
 
+    # IMPORTANT: asta rezolvă "Missing environment"
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+
     steps:
       - name: Checkout repo
         uses: actions/checkout@v4
+
+      # IMPORTANT: action oficial pt Pages
+      - name: Setup Pages
+        uses: actions/configure-pages@v5
 
       - name: Prepare docs folder
         run: mkdir -p docs
@@ -26,21 +35,25 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y gh
 
-      - name: Download release assets (from the published tag)
+      - name: Download release assets
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           TAG="${{ github.event.release.tag_name }}"
           echo "Release tag: $TAG"
 
-          if [ -z "$TAG" ]; then
-            echo "No release tag found (probably manual run). Downloading latest release assets..."
-            gh release download --repo "${{ github.repository }}" --dir docs --pattern "policy_model.pth" --clobber
-            gh release download --repo "${{ github.repository }}" --dir docs --pattern "move_vocab.pkl" --clobber
-          else
+          if [ -n "$TAG" ]; then
+            echo "Downloading assets from release tag: $TAG"
             gh release download "$TAG" --repo "${{ github.repository }}" --dir docs --pattern "policy_model.pth" --clobber
             gh release download "$TAG" --repo "${{ github.repository }}" --dir docs --pattern "move_vocab.pkl" --clobber
+          else
+            echo "No release tag (manual run). Downloading latest release assets..."
+            gh release download --repo "${{ github.repository }}" --dir docs --pattern "policy_model.pth" --clobber
+            gh release download --repo "${{ github.repository }}" --dir docs --pattern "move_vocab.pkl" --clobber
           fi
+
+          echo "Docs content:"
+          ls -la docs
 
       - name: Compute SHA256 and create version.json
         run: |
