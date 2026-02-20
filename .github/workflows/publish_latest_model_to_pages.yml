@@ -26,8 +26,8 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          gh release download --repo ${{ github.repository }} --dir docs --pattern "policy_model.pth"
-          gh release download --repo ${{ github.repository }} --dir docs --pattern "move_vocab.pkl"
+          gh release download --repo ${{ github.repository }} --dir docs --pattern "policy_model.pth" --clobber
+          gh release download --repo ${{ github.repository }} --dir docs --pattern "move_vocab.pkl" --clobber
 
       - name: Compute SHA256 and create version.json
         run: |
