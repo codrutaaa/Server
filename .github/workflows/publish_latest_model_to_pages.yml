@@ -1,0 +1,56 @@
+name: Publish latest model to GitHub Pages
+
+on:
+  workflow_dispatch:
+  release:
+    types: [published]
+
+permissions:
+  contents: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Prepare docs folder
+        run: mkdir -p docs
+
+      - name: Install GitHub CLI
+        run: sudo apt-get install gh -y
+
+      - name: Download release assets
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release download --repo ${{ github.repository }} --dir docs --pattern "policy_model.pth"
+          gh release download --repo ${{ github.repository }} --dir docs --pattern "move_vocab.pkl"
+
+      - name: Compute SHA256 and create version.json
+        run: |
+          POLICY_SHA=$(sha256sum docs/policy_model.pth | awk '{print $1}')
+          VOCAB_SHA=$(sha256sum docs/move_vocab.pkl | awk '{print $1}')
+          VERSION=$(date +%s)
+          UPDATED_AT=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+      
+          cat > docs/version.json <<EOF
+          {
+            "version": ${VERSION},
+            "updated_at": "${UPDATED_AT}",
+            "files": {
+              "policy_model.pth": { "sha256": "${POLICY_SHA}" },
+              "move_vocab.pkl": { "sha256": "${VOCAB_SHA}" }
+            }
+          }
+          EOF
+
+      - name: Commit and push
+        run: |
+          git config user.name "github-actions"
+          git config user.email "github-actions@github.com"
+          git add docs/
+          git commit -m "Auto publish latest model to Pages" || echo "No changes"
+          git push
