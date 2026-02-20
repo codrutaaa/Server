@@ -6,7 +6,9 @@ on:
     types: [published]
 
 permissions:
-  contents: write
+  contents: read
+  pages: write
+  id-token: write
 
 jobs:
   publish:
@@ -20,14 +22,25 @@ jobs:
         run: mkdir -p docs
 
       - name: Install GitHub CLI
-        run: sudo apt-get install gh -y
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y gh
 
-      - name: Download release assets
+      - name: Download release assets (from the published tag)
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          gh release download --repo ${{ github.repository }} --dir docs --pattern "policy_model.pth" --clobber
-          gh release download --repo ${{ github.repository }} --dir docs --pattern "move_vocab.pkl" --clobber
+          TAG="${{ github.event.release.tag_name }}"
+          echo "Release tag: $TAG"
+
+          if [ -z "$TAG" ]; then
+            echo "No release tag found (probably manual run). Downloading latest release assets..."
+            gh release download --repo "${{ github.repository }}" --dir docs --pattern "policy_model.pth" --clobber
+            gh release download --repo "${{ github.repository }}" --dir docs --pattern "move_vocab.pkl" --clobber
+          else
+            gh release download "$TAG" --repo "${{ github.repository }}" --dir docs --pattern "policy_model.pth" --clobber
+            gh release download "$TAG" --repo "${{ github.repository }}" --dir docs --pattern "move_vocab.pkl" --clobber
+          fi
 
       - name: Compute SHA256 and create version.json
         run: |
@@ -35,7 +48,7 @@ jobs:
           VOCAB_SHA=$(sha256sum docs/move_vocab.pkl | awk '{print $1}')
           VERSION=$(date +%s)
           UPDATED_AT=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
-      
+
           cat > docs/version.json <<EOF
           {
             "version": ${VERSION},
@@ -47,10 +60,14 @@ jobs:
           }
           EOF
 
-      - name: Commit and push
-        run: |
-          git config user.name "github-actions"
-          git config user.email "github-actions@github.com"
-          git add docs/
-          git commit -m "Auto publish latest model to Pages" || echo "No changes"
-          git push
+          echo "----- version.json -----"
+          cat docs/version.json
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: docs
+
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
